@@ -13,7 +13,7 @@ app.post('/saveBVH', (req, res) => {
 
     const JOINTS = ["Hips","Spine","Chest","Neck","Head","LeftShoulder","LeftElbow","LeftWrist","RightShoulder","RightElbow","RightWrist"];
     const FRAME_RATE = 30;
-    const SCALE = 200; // This scale factor is arbitrary; adjust based on desired size in 3D tool.
+    const SCALE = 6; // This scale factor is arbitrary; adjust based on desired size in 3D tool.
 
     // Helper function to build the BVH Header (You'll likely need to expand this for full human skeleton support)
     function buildBVHHeader(){
@@ -68,29 +68,37 @@ app.post('/saveBVH', (req, res) => {
     }
 
     const bvh = buildBVHHeader() + `Frames: ${frames.length}\nFrame Time: ${(1/FRAME_RATE).toFixed(8)}\n` + buildFramesText(frames);
-    const fileName = `motion_capture_${Date.now()}.bvh`;
-    const outPath = path.join(fileName);
-    
-    try {
-        // 1. Write the file locally
-        fs.writeFileSync(outPath, bvh);
         
-        // 2. Send the file back for download and clean up
-        res.download(outPath, fileName, (err) => {
-            if (err) {
-                console.error("Error sending file:", err);
-                res.status(500).send({ msg: 'Could not download the file.' });
-            }
-            // 3. Clean up the file after sending
-            fs.unlink(outPath, (unlinkErr) => {
-                if (unlinkErr) console.error('Failed to delete local file:', unlinkErr);
+        // Use a temporary file path without the .bvh extension for the server to write the file
+        // The final filename will be provided to the client via res.download and Content-Disposition.
+        const tempFileName = `temp_capture_${Date.now()}`;
+        const finalFileName = `motion_capture_${Date.now()}.bvh`; // This is the name the client will see
+        
+        try {
+            // 1. Write the file locally
+            fs.writeFileSync(tempFileName, bvh);
+            
+            // 2. Send the file back for download with the correct client-facing filename
+            res.download(tempFileName, finalFileName, (err) => {
+                if (err) {
+                    console.error("Error sending file:", err);
+                    // Check headers were not sent before sending status
+                    if (!res.headersSent) {
+                        res.status(500).send({ msg: 'Could not download the file.' });
+                    }
+                }
+                // 3. Clean up the file after sending
+                fs.unlink(tempFileName, (unlinkErr) => {
+                    if (unlinkErr) console.error('Failed to delete local file:', unlinkErr);
+                });
             });
-        });
 
-    } catch (e) {
-        console.error("Error saving BVH:", e);
-        res.status(500).send({ msg: 'Failed to write BVH file on server.' });
-    }
+        } catch (e) {
+            console.error("Error saving BVH:", e);
+            if (!res.headersSent) {
+                res.status(500).send({ msg: 'Failed to write BVH file on server.' });
+            }
+        }
 });
 
 app.listen(3000,()=>console.log('Server running on http://localhost:3000'));
