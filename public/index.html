@@ -1,20 +1,90 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Web Motion Capture</title>
+    <meta charset="UTF-8">
+    <title>Web Motion Capture</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f4f4f9;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        #video-container {
+            position: relative;
+            margin-bottom: 20px;
+            border: 3px solid #ccc;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        #video, #output-canvas {
+            display: block;
+            width: 640px;
+            height: 480px;
+        }
+        #output-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            /* Hide the video element behind the canvas */
+            /* video is still needed for MediaPipe input */
+            display: none; 
+        }
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+            color: white;
+            background-color: #007bff;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #stopWebcam {
+            background-color: #dc3545;
+        }
+        #stopWebcam:hover {
+            background-color: #c82333;
+        }
+        #uploadVideo, #processVideo {
+            margin-top: 10px;
+        }
+    </style>
 </head>
 <body>
-<h1>Motion Capture</h1>
+    <h1>Web Motion Capture</h1>
 
-<video id="video" width="640" height="480" autoplay muted style="border:1px solid black;"></video>
-<br>
-<button id="startWebcam">Start Webcam</button>
-<button id="stopWebcam">Stop & Export BVH</button>
-<br><br>
-<input type="file" id="uploadVideo" accept="video/*">
-<button id="processVideo">Process Video</button>
+    <div id="video-container">
+        <video id="video" width="640" height="480" autoplay muted></video>
+        <canvas id="output-canvas" width="640" height="480"></canvas>
+    </div>
+    
+    <div class="controls">
+        <button id="startWebcam">Start Webcam</button>
+        <button id="stopWebcam">Stop & Export BVH</button>
+    </div>
 
-<script type="module" src="app.js"></script>
+    <input type="file" id="uploadVideo" accept="video/*">
+    <button id="processVideo">Process Video</button>
+
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+
+    <script src="app.js"></script>
 </body>
 </html>
