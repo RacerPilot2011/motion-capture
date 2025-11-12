@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Web Motion Capture</title>
+</head>
+<body>
+<h1>Motion Capture</h1>
+
+<video id="video" width="640" height="480" autoplay muted style="border:1px solid black;"></video>
+<br>
+<button id="startWebcam">Start Webcam</button>
+<button id="stopWebcam">Stop & Export BVH</button>
+<br><br>
+<input type="file" id="uploadVideo" accept="video/*">
+<button id="processVideo">Process Video</button>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
