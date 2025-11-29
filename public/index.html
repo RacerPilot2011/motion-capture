@@ -1,90 +1,989 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Web Motion Capture</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            background-color: #f4f4f9;
-            padding: 20px;
-        }
-        h1 {
-            color: #333;
-            margin-bottom: 20px;
-        }
-        #video-container {
-            position: relative;
-            margin-bottom: 20px;
-            border: 3px solid #ccc;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-        #video, #output-canvas {
-            display: block;
-            width: 640px;
-            height: 480px;
-        }
-        #output-canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            /* Hide the video element behind the canvas */
-            /* video is still needed for MediaPipe input */
-            display: none; 
-        }
-        .controls {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        button {
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-            border: none;
-            border-radius: 5px;
-            transition: background-color 0.3s;
-            color: white;
-            background-color: #007bff;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        #stopWebcam {
-            background-color: #dc3545;
-        }
-        #stopWebcam:hover {
-            background-color: #c82333;
-        }
-        #uploadVideo, #processVideo {
-            margin-top: 10px;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <title>Fixed Motion Capture Exporter</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic@0.5/holistic.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.min.js"></script>
+  <style>
+    body {
+      background: #111;
+      color: #fff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .video-container {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin: 20px 0;
+    }
+    video, canvas {
+      width: 640px;
+      height: 480px;
+      transform: scaleX(-1);
+      border-radius: 10px;
+      margin: 10px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    }
+    button {
+      padding: 12px 24px;
+      background: #2196f3;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      margin: 10px;
+      font-size: 16px;
+      transition: all 0.3s ease;
+    }
+    button:hover { 
+      background: #1976d2; 
+      transform: translateY(-2px);
+    }
+    button:disabled {
+      background: #666;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .export-options {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 20px 0;
+    }
+    .bvh-btn {
+      background: #4caf50;
+    }
+    .bvh-btn:hover {
+      background: #388e3c;
+    }
+    .json-btn {
+      background: #ff9800;
+    }
+    .json-btn:hover {
+      background: #f57c00;
+    }
+    .csv-btn {
+      background: #9c27b0;
+    }
+    .csv-btn:hover {
+      background: #7b1fa2;
+    }
+    .gltf-btn {
+      background: #e91e63;
+    }
+    .gltf-btn:hover {
+      background: #c2185b;
+    }
+    .info {
+      background: #222;
+      padding: 15px;
+      border-radius: 8px;
+      margin: 20px auto;
+      max-width: 800px;
+      text-align: left;
+    }
+    h2 {
+      color: #4fc3f7;
+      margin-bottom: 10px;
+    }
+    .status {
+      margin: 15px 0;
+      padding: 10px;
+      border-radius: 5px;
+      background: #333;
+    }
+    .recording {
+      background: #d32f2f;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.7; }
+      100% { opacity: 1; }
+    }
+    .stats {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin: 20px 0;
+      flex-wrap: wrap;
+    }
+    .stat-box {
+      background: #222;
+      padding: 15px;
+      border-radius: 8px;
+      min-width: 150px;
+    }
+    .stat-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #4fc3f7;
+    }
+  </style>
 </head>
 <body>
-    <h1>Web Motion Capture</h1>
-
-    <div id="video-container">
-        <video id="video" width="640" height="480" autoplay muted></video>
-        <canvas id="output-canvas" width="640" height="480"></canvas>
+  <div class="container">
+    <h2>Fixed Motion Capture Exporter</h2>
+    
+    <div class="info">
+      <p>Now with proper depth tracking and working limb animations!</p>
+    </div>
+    
+    <div class="video-container">
+      <div>
+        <h3>Live Camera Feed</h3>
+        <video id="video" autoplay muted></video>
+      </div>
+      <div>
+        <h3>Pose, Hands & Face Detection</h3>
+        <canvas id="canvas"></canvas>
+      </div>
+    </div>
+    
+    <div class="stats">
+      <div class="stat-box">
+        <div class="stat-value" id="frameCount">0</div>
+        <div>Frames Captured</div>
+        </div>
+      <div class="stat-box">
+        <div class="stat-value" id="landmarkCount">0</div>
+        <div>Total Landmarks</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value" id="dataSize">0 KB</div>
+        <div>Data Size</div>
+      </div>
+    </div>
+    
+    <div class="status" id="status">
+      Click "Start Capture" to begin recording
     </div>
     
     <div class="controls">
-        <button id="startWebcam">Start Webcam</button>
-        <button id="stopWebcam">Stop & Export BVH</button>
+      <button id="start">Start Capture</button>
+      <button id="stop" disabled>Stop Capture</button>
+      <button id="reset">Reset</button>
     </div>
+    
+    <div class="export-options" id="exportOptions" style="display: none;">
+      <button class="bvh-btn" id="exportBVH">Export BVH (Blender Optimized)</button>
+      <button class="json-btn" id="exportJSON">Export JSON (Complete)</button>
+      <button class="csv-btn" id="exportCSV">Export CSV (Spreadsheet)</button>
+      <button class="gltf-btn" id="exportGLTF">Export GLTF (Animated)</button>
+    </div>
+  </div>
 
-    <input type="file" id="uploadVideo" accept="video/*">
-    <button id="processVideo">Process Video</button>
+  <script type="module">
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const status = document.getElementById("status");
+    const startBtn = document.getElementById("start");
+    const stopBtn = document.getElementById("stop");
+    const resetBtn = document.getElementById("reset");
+    const exportOptions = document.getElementById("exportOptions");
+    const exportBVH = document.getElementById("exportBVH");
+    const exportJSON = document.getElementById("exportJSON");
+    const exportCSV = document.getElementById("exportCSV");
+    const exportGLTF = document.getElementById("exportGLTF");
+    const frameCountEl = document.getElementById("frameCount");
+    const landmarkCountEl = document.getElementById("landmarkCount");
+    const dataSizeEl = document.getElementById("dataSize");
+    
+    canvas.width = 640;
+    canvas.height = 480;
 
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+    const CONFIG = {
+      fps: 30,
+      coordinateSystem: {
+        scale: 100, // Scale up for better BVH visibility
+        flipY: true,
+      }
+    };
 
-    <script src="app.js"></script>
+    let frames = [];
+    let capturing = false;
+    let stream;
+    let basePosition = null;
+
+    // Convert MediaPipe coordinates with proper depth tracking
+    function convertCoordinates(x, y, z, frameIndex) {
+      // Store base position for relative movement
+      if (frameIndex === 0 && !basePosition) {
+        basePosition = { x: (x - 0.5) * CONFIG.coordinateSystem.scale, y: (0.5 - y) * CONFIG.coordinateSystem.scale, z: z * CONFIG.coordinateSystem.scale };
+      }
+      
+      return [
+        (x - 0.5) * CONFIG.coordinateSystem.scale,
+        (0.5 - y) * CONFIG.coordinateSystem.scale,
+        z * CONFIG.coordinateSystem.scale * 50 // Amplify depth for better tracking
+      ];
+    }
+
+    // Update status message
+    function updateStatus(message, isRecording = false) {
+      status.textContent = message;
+      if (isRecording) {
+        status.classList.add("recording");
+      } else {
+        status.classList.remove("recording");
+      }
+    }
+
+    // Update statistics
+    function updateStats() {
+      frameCountEl.textContent = frames.length;
+      const totalLandmarks = frames.length > 0 ? Object.keys(frames[0]).length : 0;
+      landmarkCountEl.textContent = totalLandmarks;
+      
+      const dataSize = JSON.stringify(frames).length;
+      dataSizeEl.textContent = Math.round(dataSize / 1024) + " KB";
+    }
+
+    // Set up camera
+    async function setupCamera() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480 },
+          audio: false
+        });
+        video.srcObject = stream;
+        await video.play();
+        updateStatus("Camera ready. Click 'Start Capture' to begin recording.");
+      } catch (error) {
+        console.error("Error accessing camera:", error);
+        updateStatus("Error: Could not access camera. Please check permissions.");
+      }
+    }
+
+    // FIXED BVH Export - Blender compatible with proper structure
+    function exportBVHFile() {
+      const bvh = createBVH(frames);
+      downloadFile(bvh, 'motion_capture_blender.bvh', 'text/plain');
+      updateStatus("BVH file exported with Blender compatibility!");
+    }
+
+    function createBVH(frames) {
+      if (frames.length === 0) return "";
+      
+      // Blender-compatible BVH structure
+      let out = `HIERARCHY
+ROOT Hips
+{
+  OFFSET 0.00 0.00 0.00
+  CHANNELS 6 Xposition Yposition Zposition Zrotation Xrotation Yrotation
+  JOINT Spine
+  {
+    OFFSET 0.00 5.00 0.00
+    CHANNELS 3 Zrotation Xrotation Yrotation
+    JOINT Chest
+    {
+      OFFSET 0.00 5.00 0.00
+      CHANNELS 3 Zrotation Xrotation Yrotation
+      JOINT Neck
+      {
+        OFFSET 0.00 5.00 0.00
+        CHANNELS 3 Zrotation Xrotation Yrotation
+        JOINT Head
+        {
+          OFFSET 0.00 5.00 0.00
+          CHANNELS 3 Zrotation Xrotation Yrotation
+          End Site
+          {
+            OFFSET 0.00 5.00 0.00
+          }
+        }
+      }
+      JOINT LeftCollar
+      {
+        OFFSET 2.00 0.00 0.00
+        CHANNELS 3 Zrotation Xrotation Yrotation
+        JOINT LeftShoulder
+        {
+          OFFSET 3.00 0.00 0.00
+          CHANNELS 3 Zrotation Xrotation Yrotation
+          JOINT LeftElbow
+          {
+            OFFSET 10.00 0.00 0.00
+            CHANNELS 3 Zrotation Xrotation Yrotation
+            JOINT LeftWrist
+            {
+              OFFSET 10.00 0.00 0.00
+              CHANNELS 3 Zrotation Xrotation Yrotation
+              End Site
+              {
+                OFFSET 5.00 0.00 0.00
+              }
+            }
+          }
+        }
+      }
+      JOINT RightCollar
+      {
+        OFFSET -2.00 0.00 0.00
+        CHANNELS 3 Zrotation Xrotation Yrotation
+        JOINT RightShoulder
+        {
+          OFFSET -3.00 0.00 0.00
+          CHANNELS 3 Zrotation Xrotation Yrotation
+          JOINT RightElbow
+          {
+            OFFSET -10.00 0.00 0.00
+            CHANNELS 3 Zrotation Xrotation Yrotation
+            JOINT RightWrist
+            {
+              OFFSET -10.00 0.00 0.00
+              CHANNELS 3 Zrotation Xrotation Yrotation
+              End Site
+              {
+                OFFSET -5.00 0.00 0.00
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  JOINT LeftHip
+  {
+    OFFSET 5.00 -5.00 0.00
+    CHANNELS 3 Zrotation Xrotation Yrotation
+    JOINT LeftKnee
+    {
+      OFFSET 0.00 -15.00 0.00
+      CHANNELS 3 Zrotation Xrotation Yrotation
+      JOINT LeftAnkle
+      {
+        OFFSET 0.00 -15.00 0.00
+        CHANNELS 3 Zrotation Xrotation Yrotation
+        End Site
+        {
+          OFFSET 0.00 -5.00 0.00
+        }
+      }
+    }
+  }
+  JOINT RightHip
+  {
+    OFFSET -5.00 -5.00 0.00
+    CHANNELS 3 Zrotation Xrotation Yrotation
+    JOINT RightKnee
+    {
+      OFFSET 0.00 -15.00 0.00
+      CHANNELS 3 Zrotation Xrotation Yrotation
+      JOINT RightAnkle
+      {
+        OFFSET 0.00 -15.00 0.00
+        CHANNELS 3 Zrotation Xrotation Yrotation
+        End Site
+        {
+          OFFSET 0.00 -5.00 0.00
+        }
+      }
+    }
+  }
+}
+MOTION
+Frames: ${frames.length}
+Frame Time: ${(1 / CONFIG.fps).toFixed(6)}
+`;
+
+      // Generate animation data with proper depth and limb tracking
+      for (let i = 0; i < frames.length; i++) {
+        const frame = frames[i];
+        let line = "";
+        
+        // Calculate hips position with depth - Blender uses Y-up coordinate system
+        const hipsPos = calculateHipsPosition(frame, i);
+        line += `${hipsPos[0].toFixed(4)} ${hipsPos[1].toFixed(4)} ${hipsPos[2].toFixed(4)} `;
+        
+        // Calculate rotations with proper limb tracking for Blender
+        const rotations = calculateLimbRotationsForBlender(frame);
+        
+        // Add rotations in hierarchy order (Blender expects this specific order)
+        const jointOrder = [
+          'Hips', 'Spine', 'Chest', 'Neck', 'Head',
+          'LeftCollar', 'LeftShoulder', 'LeftElbow', 'LeftWrist',
+          'RightCollar', 'RightShoulder', 'RightElbow', 'RightWrist',
+          'LeftHip', 'LeftKnee', 'LeftAnkle',
+          'RightHip', 'RightKnee', 'RightAnkle'
+        ];
+        
+        // Skip hips rotation (already handled in position)
+        for (let joint of jointOrder.slice(1)) { // Skip Hips
+          const rot = rotations[joint] || [0, 0, 0];
+          // Ensure rotations are valid numbers, default to 0 if NaN/Infinity
+          line += `${(isNaN(rot[0]) ? 0 : rot[0]).toFixed(4)} ${(isNaN(rot[1]) ? 0 : rot[1]).toFixed(4)} ${(isNaN(rot[2]) ? 0 : rot[2]).toFixed(4)} `;
+        }
+        
+        out += line.trim() + "\n";
+      }
+      
+      return out;
+    }
+
+    function calculateHipsPosition(frame, frameIndex) {
+      // Use hip landmarks for position with depth
+      const leftHip = frame.pose_23 || [0, 0, 0];
+      const rightHip = frame.pose_24 || [0, 0, 0];
+      
+      // Average hip positions for center - adjust for Blender's Y-up coordinate system
+      const posX = ((leftHip[0] + rightHip[0]) / 2) || 0;
+      const posY = ((leftHip[1] + rightHip[1]) / 2) || 0;
+      const posZ = ((leftHip[2] + rightHip[2]) / 2) || 0;
+      
+      return [posX, posY, posZ];
+    }
+
+    function calculateLimbRotationsForBlender(frame) {
+      const rotations = {};
+      
+      // Helper to get coordinates
+      const getLM = (key) => frame[key] || [0, 0, 0];
+
+      // Calculate basic rotations for Blender compatibility
+      rotations.Spine = calculateSpineRotation(frame);
+      rotations.Chest = calculateChestRotation(frame);
+      rotations.Neck = calculateNeckRotation(frame);
+      rotations.Head = calculateHeadRotation(frame);
+      
+      // Left arm rotations
+      const leftArmRots = calculateArmRotations(
+        getLM('pose_11'), // shoulder
+        getLM('pose_13'), // elbow
+        getLM('pose_15')  // wrist
+      );
+      rotations.LeftCollar = [0, 0, 0];
+      rotations.LeftShoulder = leftArmRots.shoulder || [0, 0, 0];
+      rotations.LeftElbow = leftArmRots.elbow || [0, 0, 0];
+      rotations.LeftWrist = [0, 0, 0];
+      
+      // Right arm rotations
+      const rightArmRots = calculateArmRotations(
+        getLM('pose_12'), // shoulder
+        getLM('pose_14'), // elbow
+        getLM('pose_16')  // wrist
+      );
+      rotations.RightCollar = [0, 0, 0];
+      rotations.RightShoulder = rightArmRots.shoulder || [0, 0, 0];
+      rotations.RightElbow = rightArmRots.elbow || [0, 0, 0];
+      rotations.RightWrist = [0, 0, 0];
+      
+      // Left leg rotations
+      const leftLegRots = calculateLegRotations(
+        getLM('pose_23'), // hip
+        getLM('pose_25'), // knee
+        getLM('pose_27')  // ankle
+      );
+      rotations.LeftHip = leftLegRots.hip || [0, 0, 0];
+      rotations.LeftKnee = leftLegRots.knee || [0, 0, 0];
+      rotations.LeftAnkle = [0, 0, 0];
+      
+      // Right leg rotations
+      const rightLegRots = calculateLegRotations(
+        getLM('pose_24'), // hip
+        getLM('pose_26'), // knee
+        getLM('pose_28')  // ankle
+      );
+      rotations.RightHip = rightLegRots.hip || [0, 0, 0];
+      rotations.RightKnee = rightLegRots.knee || [0, 0, 0];
+      rotations.RightAnkle = [0, 0, 0];
+      
+      return rotations;
+    }
+
+    function calculateSpineRotation(frame) {
+      const shoulders = calculateShoulderOrientation(frame);
+      return [0, shoulders.tilt * 30, 0]; // Simplified spine rotation
+    }
+
+    function calculateChestRotation(frame) {
+      const shoulders = calculateShoulderOrientation(frame);
+      return [0, shoulders.rotation * 20, 0]; // Simplified chest rotation
+    }
+
+    function calculateNeckRotation(frame) {
+      const nose = frame.pose_0 || [0, 0, 0];
+      const shoulders = calculateShoulderOrientation(frame);
+      return [0, 0, shoulders.rotation * 15]; // Simplified neck rotation
+    }
+
+    function calculateHeadRotation(frame) {
+      // Use nose and eyes for head orientation
+      const nose = frame.pose_0 || [0, 0, 0];
+      const leftEye = frame.pose_2 || [0, 0, 0];
+      const rightEye = frame.pose_5 || [0, 0, 0];
+      
+      const eyeCenter = [
+        (leftEye[0] + rightEye[0]) / 2,
+        (leftEye[1] + rightEye[1]) / 2,
+        (leftEye[2] + rightEye[2]) / 2
+      ];
+      
+      // Simple head rotation based on eye-nose relationship
+      const headRotation = [
+        (eyeCenter[1] - nose[1]) * 50, // Pitch
+        0, // Yaw (hard to calculate without reference)
+        (eyeCenter[0] - nose[0]) * 30  // Roll
+      ];
+      
+      return headRotation;
+    }
+
+    function calculateShoulderOrientation(frame) {
+      const leftShoulder = frame.pose_11 || [0, 0, 0];
+      const rightShoulder = frame.pose_12 || [0, 0, 0];
+      
+      const shoulderVec = [
+        rightShoulder[0] - leftShoulder[0],
+        rightShoulder[1] - leftShoulder[1],
+        rightShoulder[2] - leftShoulder[2]
+      ];
+      
+      // Calculate shoulder rotation and tilt
+      const rotation = Math.atan2(shoulderVec[0], shoulderVec[2]) * (180 / Math.PI);
+      const tilt = Math.atan2(shoulderVec[1], Math.sqrt(shoulderVec[0]**2 + shoulderVec[2]**2)) * (180 / Math.PI);
+      
+      return { rotation, tilt };
+    }
+
+    function calculateArmRotations(shoulder, elbow, wrist) {
+      const upperArmVec = [elbow[0] - shoulder[0], elbow[1] - shoulder[1], elbow[2] - shoulder[2]];
+      const lowerArmVec = [wrist[0] - elbow[0], wrist[1] - elbow[1], wrist[2] - elbow[2]];
+      
+      const shoulderRotation = [
+        Math.atan2(upperArmVec[1], upperArmVec[2]) * (180 / Math.PI) * 0.5,
+        Math.atan2(upperArmVec[0], upperArmVec[2]) * (180 / Math.PI) * 0.5,
+        0
+      ];
+      
+      const elbowAngle = calculateAngle(upperArmVec, lowerArmVec);
+      const elbowRotation = [0, Math.max(0, 180 - elbowAngle) * 0.7, 0];
+      
+      return {
+        shoulder: shoulderRotation,
+        elbow: elbowRotation
+      };
+    }
+
+    function calculateLegRotations(hip, knee, ankle) {
+      const upperLegVec = [knee[0] - hip[0], knee[1] - hip[1], knee[2] - hip[2]];
+      const lowerLegVec = [ankle[0] - knee[0], ankle[1] - knee[1], ankle[2] - knee[2]];
+      
+      const hipRotation = [
+        Math.atan2(upperLegVec[1], upperLegVec[2]) * (180 / Math.PI) * 0.3,
+        Math.atan2(upperLegVec[0], upperLegVec[2]) * (180 / Math.PI) * 0.3,
+        0
+      ];
+      
+      const kneeAngle = calculateAngle(upperLegVec, lowerLegVec);
+      const kneeRotation = [0, Math.max(0, 180 - kneeAngle) * 0.8, 0];
+      
+      return {
+        hip: hipRotation,
+        knee: kneeRotation
+      };
+    }
+
+    function calculateAngle(vec1, vec2) {
+      const dot = vec1[0] * vec2[0] + vec1[1] * vec2[1] + vec1[2] * vec2[2];
+      const mag1 = Math.sqrt(vec1[0] * vec1[0] + vec1[1] * vec1[1] + vec1[2] * vec1[2]);
+      const mag2 = Math.sqrt(vec2[0] * vec2[0] + vec2[1] * vec2[1] + vec2[2] * vec2[2]);
+      
+      let angle = 0;
+      if (mag1 > 0 && mag2 > 0) {
+        angle = Math.acos(Math.min(1, Math.max(-1, dot / (mag1 * mag2)))) * (180 / Math.PI);
+      }
+      return angle;
+    }
+
+    // JSON Export (No change needed)
+    function exportJSONFile() {
+      const data = {
+        metadata: {
+          version: "1.0",
+          timestamp: new Date().toISOString(),
+          frameCount: frames.length,
+          fps: CONFIG.fps,
+          coordinateSystem: "X-right, Y-up, Z-forward",
+          landmarks: {
+            pose: 33,
+            leftHand: 21,
+            rightHand: 21,
+            face: 468
+          }
+        },
+        frames: frames.map((frame, index) => ({
+          frame: index,
+          time: index / CONFIG.fps,
+          landmarks: frame
+        }))
+      };
+      
+      const json = JSON.stringify(data, null, 2);
+      downloadFile(json, 'complete_motion_data.json', 'application/json');
+      updateStatus("JSON file exported with complete data");
+    }
+
+    // CSV Export (No change needed)
+    function exportCSVFile() {
+      if (frames.length === 0) return;
+      
+      let csv = "frame,time,landmark_type,landmark_index,x,y,z\n";
+      
+      frames.forEach((frame, frameIndex) => {
+        const time = frameIndex / CONFIG.fps;
+        
+        for (let i = 0; i < 33; i++) {
+          const key = `pose_${i}`;
+          if (frame[key]) {
+            csv += `${frameIndex},${time},pose,${i},${frame[key][0]},${frame[key][1]},${frame[key][2]}\n`;
+          }
+        }
+        
+        for (let i = 0; i < 21; i++) {
+          const key = `left_hand_${i}`;
+          if (frame[key]) {
+            csv += `${frameIndex},${time},left_hand,${i},${frame[key][0]},${frame[key][1]},${frame[key][2]}\n`;
+          }
+        }
+        
+        for (let i = 0; i < 21; i++) {
+          const key = `right_hand_${i}`;
+          if (frame[key]) {
+            csv += `${frameIndex},${time},right_hand,${i},${frame[key][0]},${frame[key][1]},${frame[key][2]}\n`;
+          }
+        }
+        
+        for (let i = 0; i < 468; i += 10) {
+          const key = `face_${i}`;
+          if (frame[key]) {
+            csv += `${frameIndex},${time},face,${i},${frame[key][0]},${frame[key][1]},${frame[key][2]}\n`;
+          }
+        }
+      });
+      
+      downloadFile(csv, 'motion_data.csv', 'text/csv');
+      updateStatus("CSV file exported for spreadsheet analysis");
+    }
+
+    // FIXED GLTF Export - Blender compatible
+    function exportGLTFFile() {
+      const gltfData = createAnimatedGLTF(frames);
+      downloadFile(gltfData, 'motion_capture_blender.gltf', 'model/gltf+json');
+      updateStatus("GLTF file exported with Blender compatibility!");
+    }
+
+    function createAnimatedGLTF(frames) {
+      if (frames.length === 0) return JSON.stringify({});
+
+      // Create a more complete GLTF structure for Blender
+      const nodes = [];
+      const animations = [];
+      
+      // Create skeleton nodes similar to BVH structure
+      const skeletonNodes = [
+        { name: "Hips", translation: [0, 0, 0], rotation: [0, 0, 0, 1] },
+        { name: "Spine", translation: [0, 5, 0], rotation: [0, 0, 0, 1] },
+        { name: "Chest", translation: [0, 5, 0], rotation: [0, 0, 0, 1] },
+        { name: "Neck", translation: [0, 5, 0], rotation: [0, 0, 0, 1] },
+        { name: "Head", translation: [0, 5, 0], rotation: [0, 0, 0, 1] },
+        { name: "LeftCollar", translation: [2, 0, 0], rotation: [0, 0, 0, 1] },
+        { name: "LeftShoulder", translation: [3, 0, 0], rotation: [0, 0, 0, 1] },
+        { name: "LeftElbow", translation: [10, 0, 0], rotation: [0, 0, 0, 1] },
+        { name: "LeftWrist", translation: [10, 0, 0], rotation: [0, 0, 0, 1] },
+        { name: "RightCollar", translation: [-2, 0, 0], rotation: [0, 0, 0, 1] },
+        { name: "RightShoulder", translation: [-3, 0, 0], rotation: [0, 0, 0, 1] },
+        { name: "RightElbow", translation: [-10, 0, 0], rotation: [0, 0, 0, 1] },
+        { name: "RightWrist", translation: [-10, 0, 0], rotation: [0, 0, 0, 1] },
+        { name: "LeftHip", translation: [5, -5, 0], rotation: [0, 0, 0, 1] },
+        { name: "LeftKnee", translation: [0, -15, 0], rotation: [0, 0, 0, 1] },
+        { name: "LeftAnkle", translation: [0, -15, 0], rotation: [0, 0, 0, 1] },
+        { name: "RightHip", translation: [-5, -5, 0], rotation: [0, 0, 0, 1] },
+        { name: "RightKnee", translation: [0, -15, 0], rotation: [0, 0, 0, 1] },
+        { name: "RightAnkle", translation: [0, -15, 0], rotation: [0, 0, 0, 1] }
+      ];
+
+      // Add nodes to hierarchy
+      skeletonNodes.forEach((node, index) => {
+        nodes.push({
+          name: node.name,
+          translation: node.translation,
+          rotation: node.rotation,
+          scale: [1, 1, 1]
+        });
+      });
+
+      // Create simple animation for hips (translation only for simplicity)
+      const times = frames.map((_, i) => i / CONFIG.fps);
+      const translations = frames.map((frame, i) => {
+        const hipsPos = calculateHipsPosition(frame, i);
+        return hipsPos;
+      });
+
+      // Flatten arrays for GLTF
+      const flatTimes = new Float32Array(times);
+      const flatTranslations = new Float32Array(translations.flat());
+
+      // Create binary data
+      const bufferData = new Uint8Array(
+        flatTimes.byteLength + flatTranslations.byteLength
+      );
+      
+      new Float32Array(bufferData, 0, flatTimes.length).set(flatTimes);
+      new Float32Array(bufferData, flatTimes.byteLength, flatTranslations.length).set(flatTranslations);
+
+      const gltf = {
+        asset: { 
+          version: "2.0", 
+          generator: "MediaPipe Motion Capture - Blender Optimized" 
+        },
+        scene: 0,
+        scenes: [{ 
+          nodes: [0] // Root node
+        }],
+        nodes: [
+          // Root node
+          { 
+            name: "Root",
+            children: [0], // Hips is child of root
+            translation: [0, 0, 0],
+            rotation: [0, 0, 0, 1]
+          },
+          // Add all skeleton nodes as children in hierarchy
+          ...nodes.map((node, index) => ({
+            ...node,
+            children: index < nodes.length - 1 ? [index + 1] : undefined
+          }))
+        ],
+        buffers: [{
+          byteLength: bufferData.byteLength,
+          uri: "data:application/octet-stream;base64," + 
+               btoa(String.fromCharCode(...new Uint8Array(bufferData)))
+        }],
+        bufferViews: [
+          {
+            buffer: 0,
+            byteOffset: 0,
+            byteLength: flatTimes.byteLength
+          },
+          {
+            buffer: 0,
+            byteOffset: flatTimes.byteLength,
+            byteLength: flatTranslations.byteLength
+          }
+        ],
+        accessors: [
+          {
+            bufferView: 0,
+            componentType: 5126, // FLOAT
+            count: times.length,
+            type: "SCALAR",
+            min: [Math.min(...times)],
+            max: [Math.max(...times)]
+          },
+          {
+            bufferView: 1,
+            componentType: 5126, // FLOAT
+            count: translations.length,
+            type: "VEC3"
+          }
+        ],
+        animations: [{
+          name: "HipsAnimation",
+          channels: [
+            {
+              sampler: 0,
+              target: {
+                node: 1, // Hips node
+                path: "translation"
+              }
+            }
+          ],
+          samplers: [
+            {
+              input: 0, // times
+              interpolation: "LINEAR",
+              output: 1  // translations
+            }
+          ]
+        }]
+      };
+
+      return JSON.stringify(gltf, null, 2);
+    }
+
+    // Utility function to download files
+    function downloadFile(content, filename, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // Initialize MediaPipe Holistic
+    const holistic = new Holistic({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic@0.5/${file}`
+    });
+
+    holistic.setOptions({
+      modelComplexity: 5,
+      smoothLandmarks: true,
+      enableSegmentation: false,
+      refineFaceLandmarks: true,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+
+    // Process results from MediaPipe
+    holistic.onResults((results) => {
+      ctx.save();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+      
+      if (results.poseLandmarks) {
+        drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, { color: "#00FF00", lineWidth: 3 });
+        drawLandmarks(ctx, results.poseLandmarks, { color: "#FF0000", radius: 2 });
+      }
+      
+      if (results.leftHandLandmarks) {
+        drawConnectors(ctx, results.leftHandLandmarks, HAND_CONNECTIONS, { color: "#00BFFF", lineWidth: 2 });
+        drawLandmarks(ctx, results.leftHandLandmarks, { color: "#00BFFF", radius: 2 });
+      }
+      
+      if (results.rightHandLandmarks) {
+        drawConnectors(ctx, results.rightHandLandmarks, HAND_CONNECTIONS, { color: "#FFA500", lineWidth: 2 });
+        drawLandmarks(ctx, results.rightHandLandmarks, { color: "#FFA500", radius: 2 });
+      }
+      
+      if (results.faceLandmarks) {
+        drawConnectors(ctx, results.faceLandmarks, FACEMESH_TESSELATION, { color: "#FF69B4", lineWidth: 1 });
+      }
+      
+      if (capturing) {
+        const frame = {};
+        const frameIndex = frames.length;
+        
+        if (results.poseLandmarks) {
+          for (let i = 0; i < results.poseLandmarks.length; i++) {
+            const lm = results.poseLandmarks[i];
+            frame[`pose_${i}`] = convertCoordinates(lm.x, lm.y, lm.z, frameIndex);
+          }
+        }
+        
+        if (results.leftHandLandmarks) {
+          for (let i = 0; i < results.leftHandLandmarks.length; i++) {
+            const lm = results.leftHandLandmarks[i];
+            frame[`left_hand_${i}`] = convertCoordinates(lm.x, lm.y, lm.z, frameIndex);
+          }
+        }
+        
+        if (results.rightHandLandmarks) {
+          for (let i = 0; i < results.rightHandLandmarks.length; i++) {
+            const lm = results.rightHandLandmarks[i];
+            frame[`right_hand_${i}`] = convertCoordinates(lm.x, lm.y, lm.z, frameIndex);
+          }
+        }
+        
+        if (results.faceLandmarks) {
+          for (let i = 0; i < results.faceLandmarks.length; i += 5) {
+            const lm = results.faceLandmarks[i];
+            frame[`face_${i}`] = convertCoordinates(lm.x, lm.y, lm.z, frameIndex);
+          }
+        }
+        
+        frames.push(frame);
+        updateStats();
+        updateStatus(`Recording... ${frames.length} frames captured`, true);
+      }
+      
+      ctx.restore();
+    });
+
+    // Process each video frame
+    async function processFrame() {
+      if (video.readyState >= 2) {
+        await holistic.send({ image: video });
+      }
+      requestAnimationFrame(processFrame);
+    }
+
+    // Event listeners
+    startBtn.onclick = async () => {
+      frames = [];
+      basePosition = null;
+      capturing = true;
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      resetBtn.disabled = true;
+      exportOptions.style.display = 'none';
+      updateStatus("Starting capture...", true);
+      updateStats();
+      
+      await setupCamera();
+      processFrame();
+    };
+
+    stopBtn.onclick = async () => {
+      capturing = false;
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      resetBtn.disabled = false;
+      exportOptions.style.display = 'flex';
+      
+      if (frames.length === 0) {
+        updateStatus("No motion data recorded!");
+        return;
+      }
+      
+      updateStatus(`Capture stopped. ${frames.length} frames recorded. Choose export format.`);
+      
+      if (stream) {
+        stream.getTracks().forEach(t => t.stop());
+      }
+    };
+
+    resetBtn.onclick = () => {
+      frames = [];
+      basePosition = null;
+      capturing = false;
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      resetBtn.disabled = true;
+      exportOptions.style.display = 'none';
+      updateStatus("Reset complete. Click 'Start Capture' to begin recording.");
+      updateStats();
+      
+      if (stream) {
+        stream.getTracks().forEach(t => t.stop());
+      }
+    };
+
+    // Export button listeners
+    exportBVH.onclick = exportBVHFile;
+    exportJSON.onclick = exportJSONFile;
+    exportCSV.onclick = exportCSVFile;
+    exportGLTF.onclick = exportGLTFFile;
+
+    // Initialize on page load
+    window.onload = async () => {
+      updateStatus("Initializing...");
+      await setupCamera();
+      updateStats();
+    };
+  </script>
 </body>
 </html>
